@@ -1,5 +1,6 @@
 # CS5043_Assignment8
 
+
 ##Data Set
 The Chesapeake Watershed data set is derived from satellite imagery over all of the US states that are part of the Chesapeake Bay watershed system. We are using the patches part of the data set. Each patch is a 256 x 256 image with 24 channels, in which each pixel corresponds to a 1m x 1m area of space. Some of these channels are visible light channels (RGB), while others encode surface reflectivity at different frequencies. In addition, each pixel is labeled as being one of:
 
@@ -73,3 +74,4 @@ The five different experiments will use folds F0 ... F4 (so, no overlap in any o
 - Figure 9: for one model, show three examples (one per row). Each row includes: Satellite image (channels 0,1,2); true labels; predicted labels.
 
 plt.imshow can be useful here, but make sure for the label images that the label-to-color mapping is the same
+
