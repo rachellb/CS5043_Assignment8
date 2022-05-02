@@ -51,7 +51,7 @@ def create_parser():
     # High-level experiment configuration
     parser.add_argument('--exp_type', type=str, default=None, help="Experiment type")
     parser.add_argument('--label', type=str, default=None, help="Extra label to add to output files")
-    parser.add_argument('--dataset', type=str, default='/home/fagg/datasets/pfam',
+    parser.add_argument('--dataset', type=str, default='/home/fagg/datasets/radiant_earth/pa',
                         help='Data set directory')
     parser.add_argument('--allele', type=str, default='1301', help="Allele number to focus on")
     parser.add_argument('--Nfolds', type=int, default=5, help='Maximum number of folds')
@@ -100,6 +100,19 @@ def create_parser():
     parser.add_argument('--testing_fraction', type=float, default=0.5,
                         help="Fraction of available testing set to actually use for testing")
     parser.add_argument('--generator_seed', type=int, default=42, help="Seed used for generator configuration")
+
+    # Image augmentation parameters
+    parser.add_argument('--height_shift_range', nargs='+', type=float, default=None, help="Shifts the image vertically")
+    parser.add_argument('--width_shift_range', nargs='+', type=float, default=None,
+                        help="Shifts the image horizontally")
+    parser.add_argument('--rotation_range', type=int, default=None, help="Degree range for random rotations")
+    parser.add_argument('--brightness_range', nargs='+', type=float, default=None,
+                        help="Range for picking a brightness shift value from")
+    parser.add_argument('--shear_range', type=float, default=None,
+                        help="Shear angle in counter-clockwise direction in degrees")
+    parser.add_argument('--horizontal_flip', type=bool, default=0, help="Randomly flip inputs horizontally")
+    parser.add_argument('--vertical_flip', type=bool, default=0, help="Randomly flip inputs vertically")
+    parser.add_argument('--rescale', type=float, default=None, help="Multiply the data by the value provided")
 
 
     return parser
@@ -269,6 +282,10 @@ def execute_exp(args=None):
     #dat_out = load_rotation(basedir=args.dataset, rotation=args.exp_index)
     dat_out = prepare_data_set(basedir=args.dataset, rotation=args.exp_index, nfolds=args.Nfolds, ntrain_folds=args.Ntraining)
 
+    # TODO: Fix this
+    image_size = args.image_size[0:2]
+    nclasses = args.image_size[2]
+
     # Compute the number of samples in each data set
     nsamples_train = dat_out['ins_train'].size
     nsamples_validation = dat_out['ins_valid'].size
@@ -293,17 +310,12 @@ def execute_exp(args=None):
     attention_layers = [{'heads': i} for i in args.attention]
     print("Attention layers:", attention_layers)
 
-    model = create_network(outs=dat_out['outs_train'],
-                           vocab_size=dat_out['n_tokens'],
-                           output_dim=args.embedding_length,
-                           len_max=dat_out['len_max'],
-                           dense_layers=dense_layers,
-                           attention_layers=attention_layers,
+    model = create_sequential(input_shape=image_size,
+                           nclasses=nclasses,
                            conv_layers=conv_layers,
-                           activation_dense=args.hidden_activation,
                            lambda_regularization=None,
-                           dropout=args.dropout,
                            lrate=args.lrate)
+
 
     # Report model structure if verbosity is turned on
     if args.verbose >= 1:
