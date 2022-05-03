@@ -67,14 +67,17 @@ def create_parser():
     # Optimization parameters
     parser.add_argument('--decay', type=float, default=0.0, help="Adam decay rate")
 
+    # Model type
+    parser.add_argument('--model_type', type=int, default=0,
+                        help='Type of model to run (seq=0, unet=1)')
 
     # CNN parameters
-    parser.add_argument('--filters', nargs='+', type=int, default=[64],
-                        help='Number of filters per 1D-CNN')
+    parser.add_argument('--filters', nargs='+', type=int, default=[30],
+                        help='Number of filters per 2D-CNN')
     parser.add_argument('--kernels', nargs='+', type=int, default=[5],
-                        help='kernel size of 1D-CNN')
+                        help='kernel size of 2D-CNN')
     parser.add_argument('--pool', nargs='+', type=int, default=[2],
-                        help='pool size of 1D-CNN')
+                        help='pool size of 2D-CNN')
 
     # Hidden unit parameters
     parser.add_argument('--hidden', nargs='+', type=int, default=[100, 5],
@@ -125,7 +128,7 @@ def exp_type_to_hyperparameters(args):
     :return: Hyperparameter set (in dictionary form)
     '''
     if args.exp_type is None:
-        p = {'rotation': range(5)}
+        p = {'rotation': range(10)}
     else:
         assert False, "Unrecognized exp_type"
 
@@ -296,25 +299,33 @@ def execute_exp(args=None):
 
     print("Total samples: Tr:%d, V:%d, Te:%d" % (nsamples_train, nsamples_validation, nsamples_testing))
 
-    # Essentially, each layer is a dictionary with a given set of properties.
-    dense_layers = [{'units': i} for i in args.hidden]
-    print("Dense layers:", dense_layers)
+
 
     conv_layers = [{'filters': f, 'kernel_size': (s), 'pool_size': (p), 'strides': (p)} if p > 1
                    else {'filters': f, 'kernel_size': (s), 'pool_size': None, 'strides': None}
                    for s, f, p, in zip(args.kernels, args.filters, args.pool)]
 
     #conv_layers = [{'filters': i} for i in args.filters]
-    print("Conv layers:", conv_layers)
+    #print("Conv layers:", conv_layers)
 
-    attention_layers = [{'heads': i} for i in args.attention]
-    print("Attention layers:", attention_layers)
+    # Selects which model to run, unet or sequential.
+    if args.model_type == 0:
+        model = create_sequential(input_shape=image_size,
+                                  nclasses=nclasses,
+                                  filters=args.filters,
+                                  pool_size=args.pool,
+                                  kernel_size=args.kernels,
+                                  lambda_regularization=None,
+                                  lrate=args.lrate)
 
-    model = create_sequential(input_shape=image_size,
-                           nclasses=nclasses,
-                           conv_layers=conv_layers,
-                           lambda_regularization=None,
-                           lrate=args.lrate)
+    else:
+        model = create_Unet(input_shape=image_size,
+                            nclasses=nclasses,
+                            filters=args.filters,
+                            pool_size=args.pool,
+                            kernel_size=args.kernels,
+                            lambda_regularization=None,
+                            lrate=args.lrate)
 
 
     # Report model structure if verbosity is turned on
@@ -349,9 +360,11 @@ def execute_exp(args=None):
 
     #dat_train, dat_valid, dat_test = create_tf_datasets(dat_out, batch=args.batch)
 
-    history = model.fit(x=dat_out['ins_train'],
-                        y=dat_out['outs_train'],
-                        batch_size=args.batch,
+    data = create_dataset()
+
+    generator = training_set_generator(ins, outs, batch_size=args.batch)
+
+    history = model.fit(generator,
                         epochs=args.epochs,
                         use_multiprocessing=False,
                         verbose=args.verbose >= 2,
@@ -364,14 +377,15 @@ def execute_exp(args=None):
     # Generate results data
     results = {}
     results['args'] = args
-    results['predict_validation'] = model.predict(dat_out['ins_valid'])
+    results['predict_validation'] = np.argmax(model.predict(dat_out['ins_valid']), axis=3)
     results['predict_validation_eval'] = model.evaluate(dat_out['ins_valid'], dat_out['outs_valid'])
 
     if dat_out['ins_test'] is not None:
-        results['predict_testing'] = model.predict(dat_out['ins_test'])
+        # argmax here takes the outputs and
+        results['predict_testing'] = np.argmax(model.predict(dat_out['ins_test']), axis=3)
         results['predict_testing_eval'] = model.evaluate(dat_out['ins_test'], dat_out['outs_test'])
 
-    results['predict_training'] = model.predict(dat_out['ins_train'])
+    results['predict_training'] = np.argmax(model.predict(dat_out['ins_train']), axis=3)
     results['predict_training_eval'] = model.evaluate(dat_out['ins_train'], dat_out['outs_train'])
     results['history'] = history.history
     tf.keras.utils.plot_model(model, to_file='%s_model_plot.png' % fbase, show_shapes=True, show_layer_names=True)

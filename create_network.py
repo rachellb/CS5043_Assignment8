@@ -9,7 +9,9 @@ import pandas as pd
 # Sequential model just an encoder/decoder without the umap style connections
 def create_sequential(input_shape,
                       nclasses,
-                      conv_layers,
+                      filters,
+                      pool_size,
+                      kernel_size,
                       lambda_regularization=None,
                       lrate=0.0001):
 
@@ -18,21 +20,18 @@ def create_sequential(input_shape,
 
     # TODO: Fix shape being fed in
     input_tensor = Input(shape=input_shape, name="input")
+    layer = input_tensor
 
-
-    for i in range(len(conv_layers)):
-        layer = Convolution2D(filters=conv_layers[i]['filters'], kernel_size=conv_layers[i]['kernel_size']
-                       , activation='relu', strides=1, padding='same')(layer)
-    """
-    layer = MaxPooling2D(pool_size=conv_layers[i]['pool_size'], strides=conv_layers[i]['strides'], padding="same",
-                      data_format="channels_last",)(layer)
-    """
+    # Essentially stays the same shape I think
+    for i in range(len(filters)):
+        layer = Convolution2D(filters=filters[i], kernel_size=kernel_size, # TODO: figure out if kernel size automatically fills in second argument
+                              activation='relu', strides=1, padding='same')(layer)
 
     # Your network output should be shape (examples, rows, cols, class),
     # where the sum of all class outputs for a single pixel is 1
     # (i.e., we are using a softmax across the last dimension of your output).
 
-    # Output is
+    # Output is probability distribution over classes (per pixel)
     output_tensor = Convolution2D(nclasses, kernel_size=(1,1),
                                   activation='softmax',  padding='same')(layer)
 
@@ -48,59 +47,64 @@ def create_sequential(input_shape,
     return model
 
 def create_Unet(input_shape,
-                      nclasses,
-                      conv_layers,
-                      lambda_regularization=None,
-                      lrate=0.0001):
+                nclasses,
+                filters,
+                pool_size,
+                kernel_size,
+                lambda_regularization=None,
+                lrate=0.0001):
+
+
     if lambda_regularization is not None:
         lambda_regularization = tf.keras.regularizers.l2(lambda_regularization)
 
-    # TODO: Fix shape being fed in
+    # Create a stack for skip connections
+    tensor_stack = []
+
     input_tensor = Input(shape=input_shape, name="input")
 
-    # 128x128
-    layer = Convolution2D(filters=conv_layers[i]['filters'], kernel_size=conv_layers[i]['kernel_size']
+    layer = input_tensor
+
+    layer = Convolution2D(filters=filters[0], kernel_size=kernel_size
+                          , activation='relu', strides=1, padding='same')(layer)
+    layer = Convolution2D(filters=filters[1], kernel_size=kernel_size
                           , activation='relu', strides=1, padding='same')(layer)
 
-    # 64x64
-    layer = MaxPooling2D(pool_size=conv_layers[i]['pool_size'], strides=conv_layers[i]['strides'], padding="same",
-                      data_format="channels_last",)(layer)
+    #Step down
+    for i in range(2, len(filters)//2): #Start counting at 2 and go up ot length of filters divided by 2
+        # Save the previous layer for skip connections
+        tensor_stack.append(layer)
 
-    layer = Convolution2D(filters=conv_layers[i]['filters'], kernel_size=conv_layers[i]['kernel_size']
-                          , activation='relu', strides=1, padding='same')(layer)
+        # Cut the resolution by half (if pool size=2)
+        layer = MaxPooling2D(pool_size=pool_size, strides=pool_size, padding="same",
+                             data_format="channels_last", )(layer)
 
-    layer = Convolution2D(filters=conv_layers[i]['filters'], kernel_size=conv_layers[i]['kernel_size']
-                          , activation='relu', strides=1, padding='same')(layer)
+        layer = Convolution2D(filters=filters[i*2], kernel_size=kernel_size
+                              , activation='relu', strides=1, padding='same')(layer)
+        layer = Convolution2D(filters=filters[i*2+1], kernel_size=kernel_size
+                              , activation='relu', strides=1, padding='same')(layer)
 
-    # 32x32
-    layer = MaxPooling2D(pool_size=conv_layers[i]['pool_size'], strides=conv_layers[i]['strides'], padding="same",
-                         data_format="channels_last", )(layer)
+    # Step up
+    for i in reverse(range(2, len(filters)//2)):
 
-    layer = Convolution2D(filters=conv_layers[i]['filters'], kernel_size=conv_layers[i]['kernel_size']
-                          , activation='relu', strides=1, padding='same')(layer)
+        # Increase the resolution up a level (by 2 if pool=2)
+        layer = UpSampling2D(size=pool_size)(layer)
 
-    layer = Convolution2D(filters=conv_layers[i]['filters'], kernel_size=conv_layers[i]['kernel_size']
-                          , activation='relu', strides=1, padding='same')(layer)
-    #######
-    layer = UpSampling2D(size=2)(layer)
+        # Add the skipped connection back in
+        layer = Concatenate([layer, tensor_stack.pop()])
+        layer = Convolution2D(filters=filters[i*2], kernel_size=kernel_size,
+                              activation='relu', strides=1, padding='same')(layer)
 
-    #64x64
-    layer = Convolution2D(filters=conv_layers[i]['filters'], kernel_size=conv_layers[i]['kernel_size']
-                          , activation='relu', strides=1, padding='same')(layer)
+        layer = Convolution2D(filters=filters[i*2], kernel_size=kernel_size,
+                              activation='relu', strides=1, padding='same')(layer)
 
-    layer = Convolution2D(filters=conv_layers[i]['filters'], kernel_size=conv_layers[i]['kernel_size']
-                          , activation='relu', strides=1, padding='same')(layer)
+    # For symmetry of beginning
+    layer = Convolution2D(filters=filters[0], kernel_size=kernel_size,
+                          activation='relu', strides=1, padding='same')(layer)
+    layer = Convolution2D(filters=filters[1], kernel_size=kernel_size,
+                          activation='relu', strides=1, padding='same')(layer)
 
 
-    layer = UpSampling2D(size=2)(layer)
-    # 128x128
-    layer = Convolution2D(filters=conv_layers[i]['filters'], kernel_size=conv_layers[i]['kernel_size']
-                          , activation='relu', strides=1, padding='same')(layer)
-
-    layer = Convolution2D(filters=conv_layers[i]['filters'], kernel_size=conv_layers[i]['kernel_size']
-                          , activation='relu', strides=1, padding='same')(layer)
-
-    # Output is
     output_tensor = Convolution2D(nclasses, kernel_size=(1, 1),
                                   activation='softmax', padding='same')(layer)
 
@@ -114,48 +118,6 @@ def create_Unet(input_shape,
 
     return model
 
-# An attempt at declaring the order of layers at the command line.
-# Takes in the layer type and the parameters associated with the layer, and outputs the layer
-#TODO: Figure out how to ensure the parameters match the given layer.
-# Maybe a stack of tuples?
-
-def makeLayer(type, parameters):
-    if type == 'LSTM':
-        layer = (LSTM(parameters['n_neurons'],
-                      activation=parameters['tanh'],
-                      use_bias=True,
-                      return_sequences=False,  # Produce entire sequence of outputs
-                      kernel_initializer='random_uniform',
-                      kernel_regularizer=lambda_regularization,
-                      unroll=False))
-
-    if type == 'RNN':
-        layer = (SimpleRNN(parameters['n_neurons'],
-                           activation=parameters['tanh'],
-                           use_bias=True,
-                           return_sequences=False,  # Produce entire sequence of outputs
-                           kernel_initializer='random_uniform',
-                           kernel_regularizer=lambda_regularization,
-                           unroll=False))
-
-    if type == 'CNN':
-        layer = (Conv1D(filters=64, kernel_size=25, activation='relu'))
-
-    # Not used in this assignment, but can be potentially recycled
-    if type == 'MP':
-        layer = MaxPooling2D(pool_size=(3,3),
-                              strides=(1,1),
-                              padding='same')
-
-    if type == 'Dense':
-        layer = (Dense(parameters['n_neurons'],
-                           activation=parameters['tanh'],
-                           use_bias=True,
-                           return_sequences=False,  # Produce entire sequence of outputs
-                           kernel_initializer='random_uniform',
-                           kernel_regularizer=lambda_regularization,
-                           unroll=False))
 
 
-    return layer
 
