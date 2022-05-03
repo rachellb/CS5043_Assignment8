@@ -24,7 +24,7 @@ def create_sequential(input_shape,
 
     # Essentially stays the same shape I think
     for i in range(len(filters)):
-        layer = Convolution2D(filters=filters[i], kernel_size=kernel_size, # TODO: figure out if kernel size automatically fills in second argument
+        layer = Convolution2D(filters=filters[i], kernel_size=(kernel_size[i]),
                               activation='relu', strides=1, padding='same')(layer)
 
     # Your network output should be shape (examples, rows, cols, class),
@@ -65,9 +65,9 @@ def create_Unet(input_shape,
 
     layer = input_tensor
 
-    layer = Convolution2D(filters=filters[0], kernel_size=kernel_size
+    layer = Convolution2D(filters=filters[0], kernel_size=(kernel_size[i])
                           , activation='relu', strides=1, padding='same')(layer)
-    layer = Convolution2D(filters=filters[1], kernel_size=kernel_size
+    layer = Convolution2D(filters=filters[1], kernel_size=(kernel_size[i])
                           , activation='relu', strides=1, padding='same')(layer)
 
     #Step down
@@ -79,9 +79,9 @@ def create_Unet(input_shape,
         layer = MaxPooling2D(pool_size=pool_size, strides=pool_size, padding="same",
                              data_format="channels_last", )(layer)
 
-        layer = Convolution2D(filters=filters[i*2], kernel_size=kernel_size
+        layer = Convolution2D(filters=filters[i*2], kernel_size=(kernel_size[i])
                               , activation='relu', strides=1, padding='same')(layer)
-        layer = Convolution2D(filters=filters[i*2+1], kernel_size=kernel_size
+        layer = Convolution2D(filters=filters[i*2+1], kernel_size=(kernel_size[i])
                               , activation='relu', strides=1, padding='same')(layer)
 
     # Step up
@@ -92,16 +92,16 @@ def create_Unet(input_shape,
 
         # Add the skipped connection back in
         layer = Concatenate([layer, tensor_stack.pop()])
-        layer = Convolution2D(filters=filters[i*2], kernel_size=kernel_size,
+        layer = Convolution2D(filters=filters[i*2], kernel_size=(kernel_size[i]),
                               activation='relu', strides=1, padding='same')(layer)
 
-        layer = Convolution2D(filters=filters[i*2], kernel_size=kernel_size,
+        layer = Convolution2D(filters=filters[i*2], kernel_size=(kernel_size[i]),
                               activation='relu', strides=1, padding='same')(layer)
 
     # For symmetry of beginning
-    layer = Convolution2D(filters=filters[0], kernel_size=kernel_size,
+    layer = Convolution2D(filters=filters[0], kernel_size=(kernel_size[i]),
                           activation='relu', strides=1, padding='same')(layer)
-    layer = Convolution2D(filters=filters[1], kernel_size=kernel_size,
+    layer = Convolution2D(filters=filters[1], kernel_size=(kernel_size[i]),
                           activation='relu', strides=1, padding='same')(layer)
 
 

@@ -33,7 +33,7 @@ def load_single_file(fname):
     
     :param fname: Absolute file name
     
-    :return: Tuple of image (256x256x24) and labels (256x256).  The outputs are proper TF Tensors
+    :return: Tuple of image (256x256x26) and labels (256x256).  The outputs are proper TF Tensors
     '''
     # Load data
     fname = fname.numpy().decode('utf-8')
@@ -97,11 +97,18 @@ def create_dataset(base_dir='/home/fagg/datasets/radiant_earth/pa', partition='t
     '''
     
     # Full list of files in the dataset
-    data = tf.data.Dataset.list_files('%s/%s/F%d/%s.npz'%(base_dir, partition, fold, filt))
-    
+    # Turn into list comprehension
+    #data = tf.data.Dataset.list_files('%s/%s/F%d/%s.npz'%(base_dir, partition, fold, filt))
+    data = tf.data.Dataset.list_files(['%s/%s/F%d/%s.npz'%(base_dir, partition, fold, f) for f in filt])
+
+
     # Load each file
     #  - py_function allows eager execution
     #  - we must declare here the return types of the Dataset
+
+    for d in data.take(1):
+        print(d)
+
     data = data.map(lambda x: tf.py_function(func=load_single_file, inp=[x], Tout=(tf.float32, tf.int8)), #, tf.float32, tf.float32)), 
                 num_parallel_calls=num_parallel_calls)
     

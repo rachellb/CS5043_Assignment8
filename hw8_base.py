@@ -1,9 +1,3 @@
-"""
-Advanced Machine Learning, 2022
-HW 4 Base Code
-Author: Andrew H. Fagg (andrewhfagg@gmail.com)
-Image classification
-"""
 
 import argparse
 import pickle
@@ -15,7 +9,7 @@ import matplotlib.pyplot as plt
 from tensorflow.python.keras.utils.vis_utils import model_to_dot
 from tensorflow.python.keras.utils.vis_utils import plot_model
 
-#from job_control import *
+from job_control import *
 from create_network import *
 from chesapeake_loader import *
 
@@ -37,7 +31,7 @@ def create_parser():
     Create argument parser
     '''
     # Parse the command-line arguments
-    parser = argparse.ArgumentParser(description='MHA', fromfile_prefix_chars='@')
+    parser = argparse.ArgumentParser(description='segment', fromfile_prefix_chars='@')
 
     # High-level commands
     parser.add_argument('--check', action='store_true', help='Check results for completeness')
@@ -54,7 +48,12 @@ def create_parser():
     parser.add_argument('--dataset', type=str, default='/home/fagg/datasets/radiant_earth/pa',
                         help='Data set directory')
     parser.add_argument('--allele', type=str, default='1301', help="Allele number to focus on")
-    parser.add_argument('--Nfolds', type=int, default=5, help='Maximum number of folds')
+    parser.add_argument('--train_filts', nargs='+', type=str, default=['*0','*1','*2','*3','*4','*5','*6','*7','*8'],
+                        help='folds to use in training')
+
+
+
+
     parser.add_argument('--results_path', type=str, default='./results', help='Results directory')
 
     # Specific experiment configuration
@@ -63,6 +62,8 @@ def create_parser():
     parser.add_argument('--epochs', type=int, default=100, help='Training epochs')
     parser.add_argument('--Ntraining', type=int, default=3, help='Number of training folds')
     parser.add_argument('--lrate', type=float, default=0.001, help="Learning rate")
+    parser.add_argument('--image_size', type=float, default=[256,256,26,7],
+                        help="Image size (rows, columns, channels, classes")
 
     # Optimization parameters
     parser.add_argument('--decay', type=float, default=0.0, help="Adam decay rate")
@@ -96,7 +97,7 @@ def create_parser():
     parser.add_argument('--patience', type=int, default=100, help="Patience for early termination")
 
     # Training parameters
-    parser.add_argument('--batch', type=int, default=64, help="Training set batch size")
+    parser.add_argument('--batch', type=int, default=8, help="Training set batch size")
     parser.add_argument('--steps_per_epoch', type=int, default=10, help="Number of gradient descent steps per epoch")
     parser.add_argument('--validation_fraction', type=float, default=0.25,
                         help="Fraction of available validation set to actually use for validation")
@@ -137,8 +138,8 @@ def exp_type_to_hyperparameters(args):
 
 #################################################################
 def check_args(args):
-    assert (args.rotation >= 0 and args.rotation < args.Nfolds), "Rotation must be between 0 and Nfolds"
-    assert (args.Ntraining >= 1 and args.Ntraining <= (args.Nfolds - 1)), "Ntraining must be between 1 and Nfolds-2"
+    #assert (args.rotation >= 0 and args.rotation < args.Nfolds), "Rotation must be between 0 and Nfolds"
+    #assert (args.Ntraining >= 1 and args.Ntraining <= (args.Nfolds - 1)), "Ntraining must be between 1 and Nfolds-2"
     assert (args.dropout is None or (args.dropout > 0.0 and args.dropout < 1)), "Dropout must be between 0 and 1"
     assert (args.lrate > 0.0 and args.lrate < 1), "Lrate must be between 0 and 1"
     assert (args.L1_regularizer is None or (
@@ -191,8 +192,6 @@ def generate_fname(args, params_str):
     '''
     # Hidden unit configuration
     hidden_str = '_'.join(str(x) for x in args.hidden)
-    # Hidden unit configuration
-    att_str = '_'.join(str(x) for x in args.attention)
 
     # Dropout
     if args.dropout is None:
@@ -233,12 +232,11 @@ def generate_fname(args, params_str):
     # learning rate
     lrate_str = "LR_%0.6f_" % args.lrate
 
-    fname = "%s/amino_%s%s_epochs_%s_att_%s_hidden_%s_%s%s%s%sntrain_%02d_rot_%02d" % (
+    fname = "%s/amino_%s%s_epochs_%s__hidden_%s_%s%s%s%sntrain_%02d_rot_%02d" % (
         args.results_path,
         experiment_type_str,
         label_str,
         epochs_str,
-        att_str,
         hidden_str,
         dropout_str,
         regularizer_l1_str,
@@ -282,13 +280,14 @@ def execute_exp(args=None):
         tf.config.threading.set_inter_op_parallelism_threads(args.cpus_per_task)
     print('Passed configure cpus')
 
-    #dat_out = load_rotation(basedir=args.dataset, rotation=args.exp_index)
-    dat_out = prepare_data_set(basedir=args.dataset, rotation=args.exp_index, nfolds=args.Nfolds, ntrain_folds=args.Ntraining)
+    # What is the point of this?
+    #test = load_single_file("radiant_earth/pa/pa_1m_2013_extended-train_patches/F0/pa_1m_2013-m_3907506_sw_18_1-0.npz")
 
     # TODO: Fix this
-    image_size = args.image_size[0:2]
-    nclasses = args.image_size[2]
+    image_size = (args.image_size[0], args.image_size[1], args.image_size[2])
+    nclasses = args.image_size[3]
 
+    """
     # Compute the number of samples in each data set
     nsamples_train = dat_out['ins_train'].size
     nsamples_validation = dat_out['ins_valid'].size
@@ -298,15 +297,17 @@ def execute_exp(args=None):
         nsamples_testing = dat_out['ins_test'].size
 
     print("Total samples: Tr:%d, V:%d, Te:%d" % (nsamples_train, nsamples_validation, nsamples_testing))
-
+    
 
 
     conv_layers = [{'filters': f, 'kernel_size': (s), 'pool_size': (p), 'strides': (p)} if p > 1
                    else {'filters': f, 'kernel_size': (s), 'pool_size': None, 'strides': None}
                    for s, f, p, in zip(args.kernels, args.filters, args.pool)]
+                   
 
     #conv_layers = [{'filters': i} for i in args.filters]
     #print("Conv layers:", conv_layers)
+    """
 
     # Selects which model to run, unet or sequential.
     if args.model_type == 0:
@@ -358,17 +359,25 @@ def execute_exp(args=None):
                                                          restore_best_weights=True,
                                                          min_delta=args.min_delta)
 
-    #dat_train, dat_valid, dat_test = create_tf_datasets(dat_out, batch=args.batch)
+    train_filt = ['*0','*1','*2','*3','*4','*5','*6','*7','*8']
+    train_filt = args.train_filts
 
-    data = create_dataset()
+    train_dat = create_dataset(base_dir=args.dataset, partition='train', fold=args.exp_index, filt=train_filt,
+                   batch_size=args.batch, prefetch=2, num_parallel_calls=4)
 
-    generator = training_set_generator(ins, outs, batch_size=args.batch)
+    val_dat = create_dataset(base_dir=args.dataset, partition='train', fold=args.exp_index, filt='*9',
+                   batch_size=args.batch, prefetch=2, num_parallel_calls=4)
 
-    history = model.fit(generator,
+    test_dat = create_dataset(base_dir=args.dataset, partition='valid', fold=args.exp_index, filt='*',
+                              batch_size=args.batch, prefetch=2, num_parallel_calls=4)
+
+    #generator = training_set_generator(ins, outs, batch_size=args.batch)
+
+    history = model.fit(train_dat,
                         epochs=args.epochs,
                         use_multiprocessing=False,
                         verbose=args.verbose >= 2,
-                        validation_data=(dat_out['ins_valid'], dat_out['outs_valid']),
+                        validation_data=val_dat,
                         validation_steps=None,
                         callbacks=[early_stopping_cb])
 
@@ -377,16 +386,16 @@ def execute_exp(args=None):
     # Generate results data
     results = {}
     results['args'] = args
-    results['predict_validation'] = np.argmax(model.predict(dat_out['ins_valid']), axis=3)
-    results['predict_validation_eval'] = model.evaluate(dat_out['ins_valid'], dat_out['outs_valid'])
+    results['predict_validation'] = np.argmax(model.predict(val_dat), axis=3)
+    results['predict_validation_eval'] = model.evaluate(val_dat)
 
-    if dat_out['ins_test'] is not None:
+    if test_dat is not None:
         # argmax here takes the outputs and
-        results['predict_testing'] = np.argmax(model.predict(dat_out['ins_test']), axis=3)
-        results['predict_testing_eval'] = model.evaluate(dat_out['ins_test'], dat_out['outs_test'])
+        results['predict_testing'] = np.argmax(model.predict(test_dat), axis=3)
+        results['predict_testing_eval'] = model.evaluate(test_dat)
 
-    results['predict_training'] = np.argmax(model.predict(dat_out['ins_train']), axis=3)
-    results['predict_training_eval'] = model.evaluate(dat_out['ins_train'], dat_out['outs_train'])
+    results['predict_training'] = np.argmax(model.predict(train_dat), axis=3)
+    results['predict_training_eval'] = model.evaluate(train_dat)
     results['history'] = history.history
     tf.keras.utils.plot_model(model, to_file='%s_model_plot.png' % fbase, show_shapes=True, show_layer_names=True)
 
