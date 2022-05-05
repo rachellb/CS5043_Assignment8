@@ -65,9 +65,9 @@ def create_Unet(input_shape,
 
     layer = input_tensor
 
-    layer = Convolution2D(filters=filters[0], kernel_size=(kernel_size[i])
+    layer = Convolution2D(filters=filters[0], kernel_size=(kernel_size[0])
                           , activation='relu', strides=1, padding='same')(layer)
-    layer = Convolution2D(filters=filters[1], kernel_size=(kernel_size[i])
+    layer = Convolution2D(filters=filters[1], kernel_size=(kernel_size[1])
                           , activation='relu', strides=1, padding='same')(layer)
 
     #Step down
@@ -85,7 +85,7 @@ def create_Unet(input_shape,
                               , activation='relu', strides=1, padding='same')(layer)
 
     # Step up
-    for i in reverse(range(2, len(filters)//2)):
+    for i in reversed(range(2, len(filters)//2)):
 
         # Increase the resolution up a level (by 2 if pool=2)
         layer = UpSampling2D(size=pool_size)(layer)
@@ -95,13 +95,13 @@ def create_Unet(input_shape,
         layer = Convolution2D(filters=filters[i*2], kernel_size=(kernel_size[i]),
                               activation='relu', strides=1, padding='same')(layer)
 
-        layer = Convolution2D(filters=filters[i*2], kernel_size=(kernel_size[i]),
+        layer = Convolution2D(filters=filters[i*2+1], kernel_size=(kernel_size[i]),
                               activation='relu', strides=1, padding='same')(layer)
 
     # For symmetry of beginning
-    layer = Convolution2D(filters=filters[0], kernel_size=(kernel_size[i]),
+    layer = Convolution2D(filters=filters[0], kernel_size=(kernel_size[0]),
                           activation='relu', strides=1, padding='same')(layer)
-    layer = Convolution2D(filters=filters[1], kernel_size=(kernel_size[i]),
+    layer = Convolution2D(filters=filters[1], kernel_size=(kernel_size[1]),
                           activation='relu', strides=1, padding='same')(layer)
 
 

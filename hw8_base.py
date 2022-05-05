@@ -5,13 +5,19 @@ import pandas as pd
 import numpy as np
 import os
 import matplotlib.pyplot as plt
+import time
 
 from tensorflow.python.keras.utils.vis_utils import model_to_dot
 from tensorflow.python.keras.utils.vis_utils import plot_model
+from sklearn.metrics import ConfusionMatrixDisplay
+from sklearn.metrics import confusion_matrix
+
 
 from job_control import *
 from create_network import *
 from chesapeake_loader import *
+
+
 
 #################################################################
 # Default plotting parameters
@@ -47,13 +53,8 @@ def create_parser():
     parser.add_argument('--label', type=str, default=None, help="Extra label to add to output files")
     parser.add_argument('--dataset', type=str, default='/home/fagg/datasets/radiant_earth/pa',
                         help='Data set directory')
-    parser.add_argument('--allele', type=str, default='1301', help="Allele number to focus on")
     parser.add_argument('--train_filts', nargs='+', type=str, default=['*0','*1','*2','*3','*4','*5','*6','*7','*8'],
                         help='folds to use in training')
-
-
-
-
     parser.add_argument('--results_path', type=str, default='./results', help='Results directory')
 
     # Specific experiment configuration
@@ -99,10 +100,6 @@ def create_parser():
     # Training parameters
     parser.add_argument('--batch', type=int, default=8, help="Training set batch size")
     parser.add_argument('--steps_per_epoch', type=int, default=10, help="Number of gradient descent steps per epoch")
-    parser.add_argument('--validation_fraction', type=float, default=0.25,
-                        help="Fraction of available validation set to actually use for validation")
-    parser.add_argument('--testing_fraction', type=float, default=0.5,
-                        help="Fraction of available testing set to actually use for testing")
     parser.add_argument('--generator_seed', type=int, default=42, help="Seed used for generator configuration")
 
     # Image augmentation parameters
@@ -129,7 +126,7 @@ def exp_type_to_hyperparameters(args):
     :return: Hyperparameter set (in dictionary form)
     '''
     if args.exp_type is None:
-        p = {'rotation': range(10)}
+        p = {'rotation': range(5)}
     else:
         assert False, "Unrecognized exp_type"
 
@@ -232,12 +229,17 @@ def generate_fname(args, params_str):
     # learning rate
     lrate_str = "LR_%0.6f_" % args.lrate
 
-    fname = "%s/amino_%s%s_epochs_%s__hidden_%s_%s%s%s%sntrain_%02d_rot_%02d" % (
+    if args.model_type==0:
+        typeStr = "sequential"
+    else:
+        typeStr = "Unet"
+
+    fname = "%s/%s_%s%s_epochs_%s_%s%s%s%sntrain_%02d_rot_%02d" % (
         args.results_path,
+        typeStr,
         experiment_type_str,
         label_str,
         epochs_str,
-        hidden_str,
         dropout_str,
         regularizer_l1_str,
         regularizer_l2_str,
@@ -287,27 +289,6 @@ def execute_exp(args=None):
     image_size = (args.image_size[0], args.image_size[1], args.image_size[2])
     nclasses = args.image_size[3]
 
-    """
-    # Compute the number of samples in each data set
-    nsamples_train = dat_out['ins_train'].size
-    nsamples_validation = dat_out['ins_valid'].size
-    if dat_out['ins_test'] is None:
-        nsamples_testing = 0
-    else:
-        nsamples_testing = dat_out['ins_test'].size
-
-    print("Total samples: Tr:%d, V:%d, Te:%d" % (nsamples_train, nsamples_validation, nsamples_testing))
-    
-
-
-    conv_layers = [{'filters': f, 'kernel_size': (s), 'pool_size': (p), 'strides': (p)} if p > 1
-                   else {'filters': f, 'kernel_size': (s), 'pool_size': None, 'strides': None}
-                   for s, f, p, in zip(args.kernels, args.filters, args.pool)]
-                   
-
-    #conv_layers = [{'filters': i} for i in args.filters]
-    #print("Conv layers:", conv_layers)
-    """
 
     # Selects which model to run, unet or sequential.
     if args.model_type == 0:
@@ -371,30 +352,69 @@ def execute_exp(args=None):
     test_dat = create_dataset(base_dir=args.dataset, partition='valid', fold=args.exp_index, filt='*',
                               batch_size=args.batch, prefetch=2, num_parallel_calls=4)
 
-    #generator = training_set_generator(ins, outs, batch_size=args.batch)
+
+
+    # This code is purely for debugging, and just tracks how much time each epoch takes
+    # https://stackoverflow.com/questions/43178668/record-the-computation-time-for-each-epoch-in-keras-during-model-fit
+    class TimeHistory(keras.callbacks.Callback):
+        def on_train_begin(self, logs={}):
+            self.times = []
+
+        def on_epoch_begin(self, epoch, logs={}):
+            self.epoch_time_start = time.time()
+
+        def on_epoch_end(self, epoch, logs={}):
+            self.times.append(time.time() - self.epoch_time_start)
+
+    time_callback = TimeHistory()
 
     history = model.fit(train_dat,
                         epochs=args.epochs,
                         use_multiprocessing=False,
                         verbose=args.verbose >= 2,
+                        steps_per_epoch=args.steps_per_epoch,
                         validation_data=val_dat,
-                        validation_steps=None,
-                        callbacks=[early_stopping_cb])
+                        validation_steps=args.steps_per_epoch,
+                        callbacks=[early_stopping_cb, time_callback])
 
+    print("Time per epoch: ")
+    print(time_callback.times)
 
-
-    # Generate results data
+    #labels = np.concatenate([y for x, y in dataset])
     results = {}
+    #y_pred_test = np.argmax(model.predict(test_dat), axis=3)
+    #y_pred_train = np.argmax(model.predict(train_dat), axis=3)
+    #y_pred_val = np.argmax(model.predict(val_dat), axis=3)
+
+    """
+    # Generate results data
+
+    ins_test = []
+    outs_test = []
+    preds_test = []
+    labels_test = []
+    for i in test_dat:
+        ins = i[0].numpy()
+        outs = i[1].numpy()
+        ins_test.append(ins)
+        outs_test.append(outs)
+        preds = model.predict(ins)
+        preds_test.append(preds)
+        labels = np.argmax(preds, axis=3)
+        labels_test.append(labels)
+    """
+
     results['args'] = args
-    results['predict_validation'] = np.argmax(model.predict(val_dat), axis=3)
+    #results['predict_validation'] = y_pred_val
     results['predict_validation_eval'] = model.evaluate(val_dat)
+
 
     if test_dat is not None:
         # argmax here takes the outputs and
-        results['predict_testing'] = np.argmax(model.predict(test_dat), axis=3)
+        #results['predict_testing'] = y_pred_test
         results['predict_testing_eval'] = model.evaluate(test_dat)
 
-    results['predict_training'] = np.argmax(model.predict(train_dat), axis=3)
+    #results['predict_training'] = y_pred_train
     results['predict_training_eval'] = model.evaluate(train_dat)
     results['history'] = history.history
     tf.keras.utils.plot_model(model, to_file='%s_model_plot.png' % fbase, show_shapes=True, show_layer_names=True)

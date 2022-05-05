@@ -106,8 +106,10 @@ def create_dataset(base_dir='/home/fagg/datasets/radiant_earth/pa', partition='t
     #  - py_function allows eager execution
     #  - we must declare here the return types of the Dataset
 
+    """
     for d in data.take(1):
         print(d)
+    """
 
     data = data.map(lambda x: tf.py_function(func=load_single_file, inp=[x], Tout=(tf.float32, tf.int8)), #, tf.float32, tf.float32)), 
                 num_parallel_calls=num_parallel_calls)

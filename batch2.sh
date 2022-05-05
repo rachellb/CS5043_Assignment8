@@ -18,5 +18,5 @@
 conda activate tf
 
 test 
-python hw8_base.py @parameters.txt --label "round1" --model_type 0 --exp_index $SLURM_ARRAY_TASK_ID
+python hw8_base.py @parameters.txt --label "round1" --model_type 2 --exp_index $SLURM_ARRAY_TASK_ID
 

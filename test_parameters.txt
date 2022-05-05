@@ -1,5 +1,7 @@
 --dataset
 radiant_earth/pa
+--model_type
+1
 --train_filts
 *0
 --exp_index
@@ -14,10 +16,10 @@ radiant_earth/pa
 --pool
 2
 --kernels
-3
-3
-3
-3
+5
+5
+5
+5
 --label
-moreFilters
+CM
 -vvv
