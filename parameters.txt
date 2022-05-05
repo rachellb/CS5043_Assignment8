@@ -1,5 +1,3 @@
---dataset
-radiant_earth/pa
 --epochs
 10
 --filters
