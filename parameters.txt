@@ -1,9 +1,7 @@
 --dataset
 radiant_earth/pa
---model_type
-0
 --epochs
-1
+10
 --filters
 30
 30
