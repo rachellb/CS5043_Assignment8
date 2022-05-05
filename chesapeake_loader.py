@@ -98,8 +98,8 @@ def create_dataset(base_dir='/home/fagg/datasets/radiant_earth/pa', partition='t
     
     # Full list of files in the dataset
     # Turn into list comprehension
-    #data = tf.data.Dataset.list_files('%s/%s/F%d/%s.npz'%(base_dir, partition, fold, filt))
-    data = tf.data.Dataset.list_files(['%s/%s/F%d/%s.npz'%(base_dir, partition, fold, f) for f in filt])
+    data = tf.data.Dataset.list_files('%s/%s/F%d/%s.npz'%(base_dir, partition, fold, filt))
+    #data = tf.data.Dataset.list_files(['%s/%s/F%d/%s.npz'%(base_dir, partition, fold, f) for f in filt])
 
 
     # Load each file
