@@ -1,5 +1,5 @@
 --epochs
-15
+20
 --filters
 30
 30

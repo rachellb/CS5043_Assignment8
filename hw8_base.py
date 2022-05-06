@@ -194,7 +194,7 @@ def generate_fname(args, params_str):
     if args.dropout is None:
         dropout_str = ''
     else:
-        dropout_str = 'drop_%0.3f_' % (args.dropout)
+        dropout_str = 'spatial_drop_%0.3f_' % (args.spatial_dropout)
 
     # L1 regularization
     if args.L1_regularizer is None:
