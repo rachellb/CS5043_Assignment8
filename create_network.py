@@ -1,7 +1,7 @@
 import tensorflow as tf
 from tensorflow.keras.layers import (Input, Dense, BatchNormalization, Dropout, Activation,
                                      Convolution2D, Dense, MaxPooling2D, Concatenate, Flatten,
-                                     UpSampling2D)
+                                     UpSampling2D, SpatialDropout2D)
 
 from tensorflow.keras.models import Model, Sequential
 import pandas as pd
@@ -11,6 +11,7 @@ def create_sequential(input_shape,
                       nclasses,
                       filters,
                       pool_size,
+                      s_dropout,
                       kernel_size,
                       lambda_regularization=None,
                       lrate=0.0001):
@@ -26,6 +27,8 @@ def create_sequential(input_shape,
     for i in range(len(filters)):
         layer = Convolution2D(filters=filters[i], kernel_size=(kernel_size[i]),
                               activation='relu', strides=1, padding='same')(layer)
+        if s_dropout:
+            layer = SpatialDropout2D(s_dropout)(layer)
 
     # Your network output should be shape (examples, rows, cols, class),
     # where the sum of all class outputs for a single pixel is 1
@@ -51,6 +54,7 @@ def create_Unet(input_shape,
                 filters,
                 pool_size,
                 kernel_size,
+                s_dropout,
                 lambda_regularization=None,
                 lrate=0.0001):
 
@@ -67,8 +71,13 @@ def create_Unet(input_shape,
 
     layer = Convolution2D(filters=filters[0], kernel_size=(kernel_size[0])
                           , activation='relu', strides=1, padding='same')(layer)
+    if s_dropout:
+        layer = SpatialDropout2D(s_dropout)(layer)
+
     layer = Convolution2D(filters=filters[1], kernel_size=(kernel_size[1])
                           , activation='relu', strides=1, padding='same')(layer)
+    if s_dropout:
+        layer = SpatialDropout2D(s_dropout)(layer)
 
     #Step down
     for i in range(2, len(filters)//2): #Start counting at 2 and go up ot length of filters divided by 2
@@ -81,8 +90,12 @@ def create_Unet(input_shape,
 
         layer = Convolution2D(filters=filters[i*2], kernel_size=(kernel_size[i])
                               , activation='relu', strides=1, padding='same')(layer)
+        if s_dropout:
+            layer = SpatialDropout2D(s_dropout)(layer)
         layer = Convolution2D(filters=filters[i*2+1], kernel_size=(kernel_size[i])
                               , activation='relu', strides=1, padding='same')(layer)
+        if s_dropout:
+            layer = SpatialDropout2D(s_dropout)(layer)
 
     # Step up
     for i in reversed(range(2, len(filters)//2)):
@@ -94,15 +107,23 @@ def create_Unet(input_shape,
         layer = Concatenate([layer, tensor_stack.pop()])
         layer = Convolution2D(filters=filters[i*2], kernel_size=(kernel_size[i]),
                               activation='relu', strides=1, padding='same')(layer)
+        if s_dropout:
+            layer = SpatialDropout2D(s_dropout)(layer)
 
         layer = Convolution2D(filters=filters[i*2+1], kernel_size=(kernel_size[i]),
                               activation='relu', strides=1, padding='same')(layer)
+        if s_dropout:
+            layer = SpatialDropout2D(s_dropout)(layer)
 
     # For symmetry of beginning
     layer = Convolution2D(filters=filters[0], kernel_size=(kernel_size[0]),
                           activation='relu', strides=1, padding='same')(layer)
+    if s_dropout:
+        layer = SpatialDropout2D(s_dropout)(layer)
     layer = Convolution2D(filters=filters[1], kernel_size=(kernel_size[1]),
                           activation='relu', strides=1, padding='same')(layer)
+    if s_dropout:
+        layer = SpatialDropout2D(s_dropout)(layer)
 
 
     output_tensor = Convolution2D(nclasses, kernel_size=(1, 1),

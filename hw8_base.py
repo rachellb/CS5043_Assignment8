@@ -296,6 +296,7 @@ def execute_exp(args=None):
                                   nclasses=nclasses,
                                   filters=args.filters,
                                   pool_size=args.pool,
+                                  s_dropout=args.spatial_dropout,
                                   kernel_size=args.kernels,
                                   lambda_regularization=None,
                                   lrate=args.lrate)
@@ -305,6 +306,7 @@ def execute_exp(args=None):
                             nclasses=nclasses,
                             filters=args.filters,
                             pool_size=args.pool,
+                            s_dropout=args.spatial_dropout,
                             kernel_size=args.kernels,
                             lambda_regularization=None,
                             lrate=args.lrate)
@@ -340,9 +342,7 @@ def execute_exp(args=None):
                                                          restore_best_weights=True,
                                                          min_delta=args.min_delta)
 
-    #train_filt = ['*0','*1','*2','*3','*4','*5','*6','*7','*8']
     train_filt = args.train_filts
-    #train_filt = '*[012345678]'
 
     train_dat = create_dataset(base_dir=args.dataset, partition='train', fold=args.exp_index, filt=train_filt,
                    batch_size=args.batch, prefetch=2, num_parallel_calls=4)
